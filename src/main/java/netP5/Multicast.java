@@ -26,6 +26,8 @@
 
 package netP5;
 
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
@@ -35,15 +37,16 @@ import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Observable;
+// import java.util.Observable;
 import java.util.logging.Logger;
 
-public class Multicast extends Observable implements Transmitter {
+public class Multicast /*extends Observable*/ implements Transmitter {
 	
 	// http://download.java.net/jdk7/archive/b123/docs/api/java/net/MulticastSocket.html
 	// http://stackoverflow.com/questions/5072028/multicast-in-java
@@ -79,81 +82,96 @@ public class Multicast extends Observable implements Transmitter {
 
 	final private List< String > self;
 
+	private PropertyChangeSupport support;
+
 	public Multicast( final String theGroup , final int thePort ) {
 		this( theGroup , thePort , 256 , 1 );
 	}
 
-	public Multicast( final String theGroup , final int thePort , final int theDatagramSize , final int theTTL ) {
 
-		group = theGroup;
-		port = thePort;
-		self = new ArrayList< String >( );
+	public Multicast(final String theGroup, final int thePort, final int theDatagramSize, final int theTTL) {
+        group = theGroup;
+        port = thePort;
+        self = new ArrayList<>();
+        support = new PropertyChangeSupport(this);
 
-		try {
-			socket = new MulticastSocket( thePort );
-			// socket.setLoopbackMode( false ); /* TODO did not work for me.*/
-			address = InetAddress.getByName( theGroup );
-			socket.joinGroup( address );
+        try {
+            socket = new MulticastSocket(thePort);
+            address = InetAddress.getByName(theGroup);
 
-			final byte[] inBuf = new byte[ theDatagramSize ];
-
-			try {
-				String ip;
-				Enumeration< NetworkInterface > interfaces = NetworkInterface.getNetworkInterfaces( );
-				while ( interfaces.hasMoreElements( ) ) {
-					NetworkInterface iface = interfaces.nextElement( );
-					// filters out 127.0.0.1 and inactive interfaces
-					if ( iface.isLoopback( ) || !iface.isUp( ) )
-						continue;
-
-					Enumeration< InetAddress > addresses = iface.getInetAddresses( );
-					while ( addresses.hasMoreElements( ) ) {
-						InetAddress addr = addresses.nextElement( );
-						ip = addr.getHostAddress( );
-						System.out.println( iface.getDisplayName( ) + " " + ip );
-						self.add( ip );
-					}
-				}
-			} catch ( SocketException e ) {
-				throw new RuntimeException( e );
+            NetworkInterface networkInterface = NetworkInterface.getByInetAddress(address);
+			if (networkInterface != null) {
+				socket.joinGroup(new InetSocketAddress(address, thePort), networkInterface);
+			} else {
+				// Network interface is not found, handle this case as needed
+				throw new IOException("Network interface for specified address not found");
 			}
 
-			Runnable server = new Runnable( ) {
+            final byte[] inBuf = new byte[theDatagramSize];
+            discoverSelf();
 
-				DatagramPacket inPacket = null;
+            Runnable server = () -> {
+                DatagramPacket inPacket;
+                setTimeToLive(theTTL);
+                while (!Thread.interrupted()) {
+                    inPacket = new DatagramPacket(inBuf, inBuf.length);
+                    try {
+                        socket.receive(inPacket);
+                        byte[] data = Arrays.copyOf(inBuf, inPacket.getLength());
+                        final Map<String, Object> m = new HashMap<>();
+                        m.put("socket-type", "multicast");
+                        m.put("socket-ref", socket);
+                        m.put("received-at", System.currentTimeMillis());
+                        m.put("multicast-group", group);
+                        m.put("multicast-sender", inPacket.getAddress().getHostAddress());
+                        m.put("multicast-port", port);
+                        m.put("data", data);
+                        support.firePropertyChange("packetReceived", null, m);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            };
 
-				public void run( ) {
-					setTimeToLive( theTTL );
-					while ( true ) {
-						inPacket = new DatagramPacket( inBuf , inBuf.length );
-						try {
-							socket.receive( inPacket );
-							byte[] data = new byte[ inPacket.getLength( ) ];
-							System.arraycopy( inBuf , 0 , data , 0 , data.length );
-							final Map< String , Object > m = new HashMap< String , Object >( );
-							m.put( "socket-type" , "multicast" );
-							m.put( "socket-ref" , socket );
-							m.put( "received-at" , System.currentTimeMillis( ) );
-							m.put( "multicast-group" , group );
-							m.put( "multicast-sender" , inPacket.getAddress( ).getHostAddress( ) );
-							m.put( "multicast-port" , port );
-							m.put( "data" , data );
-							setChanged( );
-							notifyObservers( m );
-						} catch ( IOException e ) {
-							e.printStackTrace( );
-						}
-
-					}
-				}
-			};
-
-			thread = new Thread( server );
-			thread.start( );
-		} catch ( Exception e ) {
+            thread = new Thread(server);
+            thread.start();
+        } catch (IOException e) {
+			// Handle specific IOExceptions
+			e.printStackTrace();
+			// Perform any necessary cleanup here
+			// Possibly rethrow the exception or notify the caller
+		} catch (Exception e) {
+			// Handle other Exceptions
+			e.printStackTrace();
+			// Perform any necessary cleanup here
+			// Possibly rethrow the exception or notify the caller
 		}
+    }
 
-	}
+	private void discoverSelf() throws SocketException {
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface iface = interfaces.nextElement();
+			// filters out 127.0.0.1 and inactive interfaces
+            if (iface.isLoopback() || !iface.isUp())
+                continue;
+
+            Enumeration<InetAddress> addresses = iface.getInetAddresses();
+            while (addresses.hasMoreElements()) {
+                InetAddress addr = addresses.nextElement();
+                String ip = addr.getHostAddress();
+                self.add(ip);
+            }
+        }
+    }
+
+	public void addPropertyChangeListener(PropertyChangeListener pcl) {
+        support.addPropertyChangeListener(pcl);
+    }
+
+    public void removePropertyChangeListener(PropertyChangeListener pcl) {
+        support.removePropertyChangeListener(pcl);
+    }
 
 	public String getGroup( ) {
 		return group;
@@ -203,14 +221,34 @@ public class Multicast extends Observable implements Transmitter {
 	}
 
 	public boolean close( ) {
+		boolean success = true;
 		thread.interrupt( );
 		try {
-			socket.leaveGroup( socket.getInetAddress( ) );
+			// Get the NetworkInterface that was used when joining the group
+			NetworkInterface networkInterface = NetworkInterface.getByInetAddress(address);
+			if (networkInterface != null) {
+				// Use the new leaveGroup method that is not deprecated
+				socket.leaveGroup(new InetSocketAddress(address, port), networkInterface);
+			} else {
+				// If networkInterface is null, we cannot leave the group properly
+				success = false;
+			}
 		} catch ( IOException e ) {
 			e.printStackTrace( );
+			success = false; // Set success to false as an exception occurred
 		}
-		socket.close( );
-		return false;
+		
+		// Close the socket after leaving the group
+		try {
+			socket.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+			success = false; // Set success to false as an exception occurred
+		}
+
+		// The return value should reflect the success or failure of the close operation
+		// Assuming true for success and false for failure as an example
+		return success; //false Return the success status
 	}
 
 }
