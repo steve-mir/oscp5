@@ -18,9 +18,9 @@
  * Free Software Foundation, Inc., 59 Temple Place, Suite 330,
  * Boston, MA  02111-1307  USA
  * 
- * @author		##author##
+ * @author		@steve-mir
  * @modified	##date##
- * @version		##version##
+ * @version		0.0.1
  */
 
 package netP5;
@@ -30,6 +30,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HexFormat;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 public class Bytes {
 
@@ -37,26 +40,35 @@ public class Bytes {
 	}
 
 	/**
-	 * converts an object array into a String that is formated like a list
+	 * converts an object array into a String that is formatted like a list
 	 * 
 	 */
-	public static String getAsString( Object[] theObject ) {
-		StringBuffer s = new StringBuffer( );
-		for ( int i = 0 ; i < theObject.length ; i++ ) {
-			s.append( "[" + i + "]" + " " + theObject[ i ] + "\n" );
-		}
-		return s.toString( );
-	}
+	public static String getAsString(Object[] theObject) {
+        var s = new StringBuilder();
+        for (int i = 0; i < theObject.length; i++) {
+            s.append("[").append(i).append("]").append(" ").append(theObject[i]).append("\n");
+        }
+        return s.toString();
+    }
 
-	public static String getAsString( byte[] theBytes ) {
-		StringBuffer s = new StringBuffer( );
-		for ( int i = 0 ; i < theBytes.length ; i++ ) {
-			s.append( ( char ) theBytes[ i ] );
-		}
-		return s.toString( );
-	}
+	public static String getAsString(byte[] theBytes) {
+        var s = new StringBuilder();
+        for (byte theByte : theBytes) {
+            s.append((char) theByte);
+        }
+        return s.toString();
+    }
 
 	public static int toInt( byte abyte0[] ) {
+		if (abyte0 == null) {
+			return 0;
+		}
+	
+		// Check if the length of the array is at least 4
+		if (abyte0.length < 4) {
+			throw new IllegalArgumentException("Input byte array must contain at least 4 bytes");
+		}
+	
 		return ( abyte0[ 3 ] & 0xff ) + ( ( abyte0[ 2 ] & 0xff ) << 8 ) + ( ( abyte0[ 1 ] & 0xff ) << 16 ) + ( ( abyte0[ 0 ] & 0xff ) << 24 );
 	}
 
@@ -169,20 +181,13 @@ public class Bytes {
 	}
 
 	public static String toString( byte abyte0[] , int i , int j ) {
-		char ac[] = new char[ j * 2 ];
-		int k = i;
-		int l = 0;
-		for ( ; k < i + j ; k++ ) {
-			byte byte0 = abyte0[ k ];
-			ac[ l++ ] = hexDigits[ byte0 >>> 4 & 0xf ];
-			ac[ l++ ] = hexDigits[ byte0 & 0xf ];
-		}
-
-		return new String( ac );
+		HexFormat hexFormat = HexFormat.of();
+    	return hexFormat.formatHex(abyte0, i, i + j);
 	}
 
 	public static String toString( byte abyte0[] ) {
-		return toString( abyte0 , 0 , abyte0.length );
+		HexFormat hexFormat = HexFormat.of();
+    	return hexFormat.formatHex(abyte0);
 	}
 
 	public static void printBytes( byte[] byteArray ) {
@@ -200,47 +205,25 @@ public class Bytes {
 	 * ByteStream
 	 */
 
-	private static byte[] toByteArray( int in_int ) {
-		byte a[] = new byte[ 4 ];
-		for ( int i = 0 ; i < 4 ; i++ ) {
-
-			int b_int = ( in_int >> ( i * 8 ) ) & 255;
-			byte b = ( byte ) ( b_int );
-
-			a[ i ] = b;
-		}
-		return a;
-	}
+	//  Not used locally
+	// private static byte[] toByteArray( int in_int ) {
+	// 	return ByteBuffer.allocate(4).putInt(in_int).array();
+	// }
 
 	private static byte[] toByteArrayBigEndian( int theInt ) {
-		byte a[] = new byte[ 4 ];
-		for ( int i = 0 ; i < 4 ; i++ ) {
-			int b_int = ( theInt >> ( i * 8 ) ) & 255;
-			byte b = ( byte ) ( b_int );
-			a[ 3 - i ] = b;
-		}
-		return a;
+		return ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(theInt).array();
 	}
 
 	private static int asInt( byte[] byte_array_4 ) {
-		int ret = 0;
-		for ( int i = 0 ; i < 4 ; i++ ) {
-			int b = ( int ) byte_array_4[ i ];
-			if ( i < 3 && b < 0 ) {
-				b = 256 + b;
-			}
-			ret += b << ( i * 8 );
-		}
-		return ret;
+		return ByteBuffer.wrap(byte_array_4).order(ByteOrder.LITTLE_ENDIAN).getInt();
 	}
 
 	public static int toIntLittleEndian( InputStream theInputStream ) throws java.io.IOException {
 		byte[] byte_array_4 = new byte[ 4 ];
 
-		byte_array_4[ 0 ] = ( byte ) theInputStream.read( );
-		byte_array_4[ 1 ] = ( byte ) theInputStream.read( );
-		byte_array_4[ 2 ] = ( byte ) theInputStream.read( );
-		byte_array_4[ 3 ] = ( byte ) theInputStream.read( );
+		if (theInputStream.read(byte_array_4) != 4) {
+        	throw new java.io.IOException("Could not read 4 bytes for an int value");
+    	}
 
 		return asInt( byte_array_4 );
 	}
@@ -248,11 +231,11 @@ public class Bytes {
 	public static int toIntBigEndian( InputStream theInputStream ) throws java.io.IOException {
 		byte[] byte_array_4 = new byte[ 4 ];
 		/* used to reverse the int32 Big Endian of the tcp header to convert it to an int */
-		byte_array_4[ 3 ] = ( byte ) theInputStream.read( );
-		byte_array_4[ 2 ] = ( byte ) theInputStream.read( );
-		byte_array_4[ 1 ] = ( byte ) theInputStream.read( );
-		byte_array_4[ 0 ] = ( byte ) theInputStream.read( );
-		return asInt( byte_array_4 );
+		if (theInputStream.read(byte_array_4) != 4) {
+        	throw new java.io.IOException("Could not read 4 bytes for an int value");
+    	}
+    	ByteBuffer bb = ByteBuffer.wrap(byte_array_4).order(ByteOrder.BIG_ENDIAN);
+		return bb.getInt();
 	}
 
 	public static String toString( InputStream ins ) throws java.io.IOException {
@@ -352,11 +335,12 @@ public class Bytes {
 		toStream( os , ( int ) file.length( ) );
 
 		byte b[] = new byte[ 1024 ];
-		InputStream is = new FileInputStream( file );
-		int numRead = 0;
+		try (InputStream is = new FileInputStream( file )) {
+			int numRead = 0;
 
-		while ( ( numRead = is.read( b ) ) > 0 ) {
-			os.write( b , 0 , numRead );
+			while ( ( numRead = is.read( b ) ) > 0 ) {
+				os.write( b , 0 , numRead );
+			}
 		}
 		os.flush( );
 	}
