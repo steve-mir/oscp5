@@ -30,17 +30,19 @@ import java.util.logging.Logger;
 public class NetP5 {
 
 	final static Logger LOGGER = Logger.getLogger( NetP5.class.getName( ) );
+	private static final String DEFAULT_HOST = "127.0.0.1";
+
 
 	static public UdpClient createUdpClient( String theHost , final int thePort ) {
 		return new UdpClient( theHost , thePort );
 	}
 
 	static public UdpClient createUdpClient( final int thePort ) {
-		return createUdpClient( "127.0.0.1" , thePort );
+		return createUdpClient( DEFAULT_HOST , thePort );
 	}
 
 	static public UdpServer createUdpServer( final int thePort , final int theDatagramSize ) {
-		return new UdpServer( thePort , theDatagramSize );
+		return new UdpServer(DEFAULT_HOST, thePort , theDatagramSize );
 	}
 
 	static public UdpServer createUdpServer( final String theHost , final int thePort , final int theDatagramSize ) {
@@ -56,7 +58,7 @@ public class NetP5 {
 	}
 
 	static public TcpClient createTcpClient( final int thePort ) {
-		return new TcpClient( "127.0.0.1" , thePort );
+		return new TcpClient( DEFAULT_HOST , thePort );
 	}
 
 	static public TcpClient createTcpClient( final String theHost , final int thePort ) {
