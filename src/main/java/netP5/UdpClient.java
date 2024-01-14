@@ -38,10 +38,10 @@ public final class UdpClient implements Transmitter {
 
 	private DatagramChannel channel;
 
-	@SuppressWarnings( "unused" )
-	private UdpClient( ) {
-		socket = null;
-	}
+	// @SuppressWarnings( "unused" )
+	// private UdpClient( ) {
+	// 	socket = null;
+	// }
 
 	public UdpClient( String theHost , int thePort ) {
 
@@ -60,7 +60,9 @@ public final class UdpClient implements Transmitter {
 
 	public boolean close( ) {
 		try {
-			channel.close( );
+			if (channel != null) {
+				channel.close( );
+			}
 			return true;
 		} catch ( IOException e ) {
 			e.printStackTrace( );
@@ -68,13 +70,15 @@ public final class UdpClient implements Transmitter {
 		return false;
 	}
 
+	@Override
 	public boolean send( byte[] theContent ) {
+		ByteBuffer buffer = ByteBuffer.wrap(theContent);
 		try {
 
-			ByteBuffer buffer = ByteBuffer.allocate( theContent.length );
-			buffer.clear( );
-			buffer.put( theContent );
-			buffer.flip( );
+			// ByteBuffer buffer = ByteBuffer.allocate( theContent.length );
+			// buffer.clear( );
+			// buffer.put( theContent );
+			// buffer.flip( );
 			channel.send( buffer , socket );
 			return true;
 
@@ -84,34 +88,40 @@ public final class UdpClient implements Transmitter {
 		return false;
 	}
 
+	@Override
 	public boolean send( byte[] theContent , Collection< InetSocketAddress > theAddress ) {
-		InetSocketAddress[] o = new InetSocketAddress[ theAddress.size( ) ];
-		return send( theContent , theAddress.toArray( o ) );
+		for (InetSocketAddress address : theAddress) {
+            if (!send(theContent, address)) {
+                return false;
+            }
+        }
+        return true;
+		
 	}
 
+	@Override
 	public boolean send( byte[] theContent , String theHost , int thePort ) {
 		return send( theContent , new InetSocketAddress( theHost , thePort ) );
 	}
 
+	@Override
 	public boolean send( byte[] theContent , SocketAddress ... theAddress ) {
-		try {
-
-			ByteBuffer buffer = ByteBuffer.allocate( theContent.length );
-			buffer.clear( );
-			buffer.put( theContent );
-			buffer.flip( );
-			DatagramChannel channel = DatagramChannel.open( );
-
-			for ( SocketAddress addr : theAddress ) {
-				channel.send( buffer , addr );
-			}
-
-			return true;
-
-		} catch ( Exception e ) {
-			System.err.println( "Could not send datagram " + e );
-		}
-		return false;
+		for (SocketAddress address : theAddress) {
+            if (!send(theContent, address)) {
+                return false;
+            }
+        }
+        return true;
 	}
 
+	private boolean send(byte[] theContent, SocketAddress theAddress) {
+        ByteBuffer buffer = ByteBuffer.wrap(theContent);
+        try (DatagramChannel sendChannel = DatagramChannel.open()) {
+            sendChannel.send(buffer, theAddress);
+            return true;
+        } catch (IOException e) {
+            System.err.println("Could not send datagram to " + theAddress + ": " + e.getMessage());
+        }
+        return false;
+    }
 }
