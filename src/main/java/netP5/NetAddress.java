@@ -27,6 +27,7 @@ package netP5;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class NetAddress {
 
@@ -40,8 +41,20 @@ public class NetAddress {
 
 	protected boolean isValid = false;
 
-	private NetAddress( ) {
-	}
+	private static final ConcurrentHashMap<String, InetAddress> cache = new ConcurrentHashMap<>();
+
+    public static InetAddress getInetAddress(String host) throws UnknownHostException {
+        return cache.computeIfAbsent(host, h -> {
+            try {
+                return InetAddress.getByName(h);
+            } catch (UnknownHostException e) {
+                throw new RuntimeException(e); // Rethrow as unchecked exception or handle appropriately
+            }
+        });
+    }
+
+	// private NetAddress( ) {
+	// }
 
 	public NetAddress( final int thePort ) {
 		this( "127.0.0.1" , thePort );
@@ -52,10 +65,11 @@ public class NetAddress {
 		port = thePort;
 		if ( thePort > 0 ) {
 			try {
-				inetaddress = InetAddress.getByName( theAddress );
+				// inetaddress = InetAddress.getByName( theAddress );
+				inetaddress = NetAddress.getInetAddress(theAddress);
 				isValid = true;
 			} catch ( UnknownHostException e ) {
-				System.out.println( "no such host " + inetaddress );
+				System.err.println( "no such host " + inetaddress + " address " + theAddress);
 			}
 		}
 	}

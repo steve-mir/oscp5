@@ -32,37 +32,31 @@ import java.util.List;
 @Deprecated
 public class NetAddressList {
 
-	protected List< NetAddress > _myList = new ArrayList< NetAddress >( );
+	protected List< NetAddress > _myList = new ArrayList<>( );
 
 	public void add( NetAddress theNetAddress ) {
-		if ( theNetAddress.isValid == true ) {
+		if ( theNetAddress.isValid ) {
 			_myList.add( theNetAddress );
 		}
 	}
 
 	public void add( String theAddress , int thePort ) {
 		NetAddress myOscHost = new NetAddress( theAddress , thePort );
-		if ( myOscHost.isValid == true ) {
+		if ( myOscHost.isValid ) {
 			_myList.add( myOscHost );
 		}
 	}
 
-	public void remove( String theAddress , int thePort ) {
-		for ( int i = 0 ; i < _myList.size( ) ; i++ ) {
-			NetAddress myHost = ( ( NetAddress ) _myList.get( i ) );
-			if ( myHost.hostAddress.equals( theAddress ) && myHost.port == thePort ) {
-				_myList.remove( myHost );
-			}
-		}
-	}
+	public void remove(String theAddress, int thePort) {
+        _myList.removeIf(myHost -> myHost.hostAddress.equals(theAddress) && myHost.port == thePort);
+    }
 
 	public void remove( NetAddress theNetAddress ) {
 		_myList.remove( theNetAddress );
 	}
 
 	public NetAddress get( String theIPaddress , int thePort ) {
-		for ( int i = 0 ; i < _myList.size( ) ; i++ ) {
-			NetAddress myHost = ( ( NetAddress ) _myList.get( i ) );
+		for (NetAddress myHost : _myList) {
 			if ( myHost.hostAddress.equals( theIPaddress ) && myHost.port == thePort ) {
 				return myHost;
 			}
@@ -71,16 +65,12 @@ public class NetAddressList {
 
 	}
 
-	public boolean contains( NetAddress theNetAddress ) {
-		if ( _myList.contains( theNetAddress ) ) {
-			return true;
-		}
-		return false;
-	}
+	public boolean contains(NetAddress theNetAddress) {
+        return _myList.contains(theNetAddress);
+    }
 
 	public boolean contains( String theIPaddress , int thePort ) {
-		for ( int i = 0 ; i < _myList.size( ) ; i++ ) {
-			NetAddress myHost = _myList.get( i );
+		for (NetAddress myHost : _myList) {
 			if ( myHost.hostAddress.equals( theIPaddress ) && myHost.port == thePort ) {
 				return true;
 			}
@@ -93,10 +83,10 @@ public class NetAddressList {
 	}
 
 	public void set( NetAddress ... theList ) {
-		_myList = new ArrayList< NetAddress >( Arrays.asList( theList ) );
+		_myList = new ArrayList<>( Arrays.asList( theList ) );
 	}
 
-	public List list( ) {
+	public List<NetAddress> list( ) {
 		return _myList;
 	}
 
