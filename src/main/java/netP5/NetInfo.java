@@ -33,10 +33,16 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.net.URI;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.logging.Logger;
@@ -50,7 +56,7 @@ public class NetInfo {
 
 	public static void print( ) {
 		try {
-			java.net.InetAddress i1 = java.net.InetAddress.getLocalHost( );
+			var i1 = java.net.InetAddress.getLocalHost( );
 			System.out.println( "### hostname/ip : " + i1 ); // name and IP address
 			System.out.println( "### hostname : " + i1.getHostName( ) ); // name
 			System.out.println( "### ip : " + i1.getHostAddress( ) ); // IP address
@@ -62,7 +68,7 @@ public class NetInfo {
 
 	public static String getHostAddress( ) {
 		try {
-			java.net.InetAddress i = java.net.InetAddress.getLocalHost( );
+			var i = java.net.InetAddress.getLocalHost( );
 			return i.getHostAddress( );
 		} catch ( Exception e ) {}
 		return "ERROR";
@@ -73,7 +79,7 @@ public class NetInfo {
 		return getHostAddress( );
 	}
 
-	public static String wan( ) {
+	public static String wanOld( ) {
 		// create URL object.
 		String myIp = null;
 		URL u = null;
@@ -121,6 +127,36 @@ public class NetInfo {
 		return myIp;
 	}
 
+	private static String extractIpAddress(String responseBody) {
+        String[] tokens = responseBody.split(" ");
+        for (int i = 0; i < tokens.length; i++) {
+            if ("Address:".equals(tokens[i]) && i + 1 < tokens.length) {
+                String ip = tokens[i + 1];
+                LOGGER.info("WAN address : " + ip);
+                return ip;
+            }
+        }
+        return null;
+    }
+	
+	public static String wan() {
+		String URL_STRING = "http://checkip.dyndns.org";
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(URL_STRING))
+                .GET()
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return extractIpAddress(response.body());
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Error accessing " + URL_STRING + " - " + e.getMessage());
+        }
+        return null;
+    }
+
 	/**
 	 * 
 	 * returns a map of available network interfaces. this map's keys use the network interface's
@@ -129,25 +165,28 @@ public class NetInfo {
 	 * byte-array), inet-address (java.net.InetAddress see javadoc)and network-interface (the raw
 	 * java.net.NetworkInterface object, see javadoc).
 	 */
-	static public Map< String , Map > getNetworkInterfaces( ) {
-		Map< String , Map > m = new HashMap< String , Map >( );
-		Enumeration< NetworkInterface > nets;
+	static public Map< String , Map<String, Object>> getNetworkInterfaces( ) {
+		Map<String, Map<String, Object>> m = new HashMap<>();
 		try {
-			nets = NetworkInterface.getNetworkInterfaces( );
+			Enumeration< NetworkInterface > nets = NetworkInterface.getNetworkInterfaces( );
 			for ( NetworkInterface netint : Collections.list( nets ) ) {
-				Map< String , Object > m1 = new HashMap< String , Object >( );
+				Map< String , Object > m1 = new HashMap<>( );
 				m.put( netint.getDisplayName( ) , m1 );
 				m1.put( "name" , netint.getName( ) );
 				m1.put( "display-name" , netint.getDisplayName( ) );
 				m1.put( "mac" , netint.getHardwareAddress( ) );
 				m1.put( "network-interface" , netint );
+
+				List<InetAddress> inetAddressesList = new ArrayList<>();
 				Enumeration< InetAddress > inetAddresses = netint.getInetAddresses( );
 				for ( InetAddress inetAddress : Collections.list( inetAddresses ) ) {
-					m1.put( "inet-address" , inetAddress );
+					inetAddressesList.add(inetAddress);
 				}
+				m1.put( "inet-address" , inetAddressesList );
 
 			}
 		} catch ( SocketException e ) {
+			LOGGER.severe("Error while getting network interfaces: " + e.getMessage());
 			e.printStackTrace( );
 		}
 
@@ -156,7 +195,7 @@ public class NetInfo {
 
 	static public String getIpAddress( ) {
 		// see [1]
-		String ip = "";
+		StringBuilder ip = new StringBuilder();
 		try {
 			Enumeration< NetworkInterface > enumNetworkInterfaces = NetworkInterface.getNetworkInterfaces( );
 			while ( enumNetworkInterfaces.hasMoreElements( ) ) {
@@ -165,17 +204,17 @@ public class NetInfo {
 				while ( enumInetAddress.hasMoreElements( ) ) {
 					InetAddress inetAddress = enumInetAddress.nextElement( );
 
-					String ipAddress = "";
+					// String ipAddress = "";
 					if ( inetAddress.isLoopbackAddress( ) ) {
-						ipAddress = "LoopbackAddress: ";
+						ip.append("LoopbackAddress: ");
 					} else if ( inetAddress.isSiteLocalAddress( ) ) {
-						ipAddress = "SiteLocalAddress: ";
+						ip.append("SiteLocalAddress: ");
 					} else if ( inetAddress.isLinkLocalAddress( ) ) {
-						ipAddress = "LinkLocalAddress: ";
+						ip.append("LinkLocalAddress: ");
 					} else if ( inetAddress.isMulticastAddress( ) ) {
-						ipAddress = "MulticastAddress: ";
+						ip.append("MulticastAddress: ");
 					}
-					ip += ipAddress + inetAddress.getHostAddress( ) + "\n";
+					ip.append(inetAddress.getHostAddress()).append("\n");
 				}
 
 			}
@@ -183,10 +222,10 @@ public class NetInfo {
 		} catch ( SocketException e ) {
 			// TODO Auto-generated catch block
 			e.printStackTrace( );
-			ip += "Something Wrong! " + e.toString( ) + "\n";
+			ip.append("Something Wrong! " + e.toString( ) + "\n");
 		}
 
-		return ip;
+		return ip.toString();
 	}
 
 	public static void main( String[] args ) {
