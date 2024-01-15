@@ -42,10 +42,13 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Observable;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-public final class TcpClient extends Observable implements Runnable , Transmitter {
+// TODO: Remove Observable
+public final class TcpClient extends Observable  implements Runnable , Transmitter {
 
 	/* adapted from http://bobah.net/d4d/source-code/networking/tcp-client-java-nio */
 
@@ -57,6 +60,7 @@ public final class TcpClient extends Observable implements Runnable , Transmitte
 	private boolean reconnect = false;
 	private ByteBuffer readBuffer = ByteBuffer.allocateDirect( READ_BUFFER_SIZE ); // 1Mb
 	private ByteBuffer writeBuffer = ByteBuffer.allocateDirect( WRITE_BUFFER_SIZE ); // 1Mb
+	private final ExecutorService executor = Executors.newSingleThreadExecutor();
 	private final Thread thread = new Thread( this );
 	private SocketAddress address;
 	private Selector selector;
@@ -69,12 +73,13 @@ public final class TcpClient extends Observable implements Runnable , Transmitte
 	public TcpClient( String theHost , int thePort ) {
 
 		address = new InetSocketAddress( theHost , thePort );
+		executor.execute(this);
 
-		try {
-			thread.start( );
-		} catch ( Exception e ) {
-			e.printStackTrace( );
-		}
+		// try {
+		// 	thread.start( );
+		// } catch ( Exception e ) {
+		// 	e.printStackTrace( );
+		// }
 	}
 
 	public TcpClient( int thePort ) {
@@ -85,11 +90,12 @@ public final class TcpClient extends Observable implements Runnable , Transmitte
 			e1.printStackTrace( );
 		}
 
-		try {
-			thread.start( );
-		} catch ( Exception e ) {
-			e.printStackTrace( );
-		}
+		executor.execute(this);
+		// try {
+		// 	thread.start( );
+		// } catch ( Exception e ) {
+		// 	e.printStackTrace( );
+		// }
 	}
 
 	public void join( ) throws InterruptedException {
@@ -101,35 +107,41 @@ public final class TcpClient extends Observable implements Runnable , Transmitte
 	public void stop( ) throws IOException , InterruptedException {
 
 		System.out.println( "stopping event loop" );
-		thread.interrupt( );
-		selector.wakeup( );
+		executor.shutdownNow();
+        if (selector != null) {
+            selector.wakeup();
+        }
 
 	}
 
 	public boolean close( ) {
 		try {
-			channel.close( );
-			//stop( );
+			if (channel != null) {
+                channel.close();
+            }
+			stop( );
 			return true;
 		} catch ( Exception e ) {
 			e.printStackTrace( );
 		}
 		return false;
 	}
-	
+	// ***
 
 	private void notification( byte[] theData , int theOperation , SelectionKey theKey ) {
 
-		Map< String , Object > m = new HashMap< String , Object >( );
-		SocketChannel channel = ( ( SocketChannel ) theKey.channel( ) );
-		m.put( "data" , theData );
-		m.put( "received-at" , System.currentTimeMillis( ) );
-		m.put( "operation" , theOperation );
-		m.put( "socket-type" , "tcp" );
-		m.put( "socket-ref" , channel );
-		m.put( "socket-address" , channel.socket( ).getInetAddress( ).getHostAddress( ) );
-		m.put( "socket-port" , channel.socket( ).getPort( ) );
-		m.put( "local-port" , channel.socket( ).getLocalPort( ) );
+		SocketChannel channel = (SocketChannel) theKey.channel();
+        Map<String, Object> m = Map.of(
+            "data", theData,
+            "received-at", System.currentTimeMillis(),
+			 "operation" , theOperation,
+			 "socket-type" , "tcp" ,
+			 "socket-ref" , channel,
+			 "socket-address" , channel.socket( ).getInetAddress( ).getHostAddress( ) ,
+			 "socket-port" , channel.socket( ).getPort( ),
+			 "local-port" , channel.socket( ).getLocalPort( ) 
+		);
+
 		setChanged( );
 		notifyObservers( m );
 
